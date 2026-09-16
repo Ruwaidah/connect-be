@@ -201,6 +201,95 @@ const getAllImages = () => {
   return db("images");
 };
 
+
+
+// *********************** BLOCK USER *************************
+const blockUser = async ({
+  blockerId,
+  blockedId,
+}) => {
+  return db.transaction(async (trx) => {
+    // Remove friendship in either direction
+    await trx("friends")
+      .where({
+        user_id: blockerId,
+        friend_id: blockedId,
+      })
+      .orWhere({
+        user_id: blockedId,
+        friend_id: blockerId,
+      })
+      .del();
+
+    // Remove pending friend requests in either direction
+    await trx("friendRequest")
+      .where({
+        userSendRequest: blockerId,
+        userRecieveRequest: blockedId,
+      })
+      .orWhere({
+        userSendRequest: blockedId,
+        userRecieveRequest: blockerId,
+      })
+      .del();
+
+    const existing = await trx("blocked_users")
+      .where({
+        blockerId,
+        blockedId,
+      })
+      .first();
+
+    if (existing) {
+      return existing;
+    }
+
+    const [blocked] = await trx("blocked_users")
+      .insert({
+        blockerId,
+        blockedId,
+      })
+      .returning("*");
+
+    return blocked;
+  });
+};
+
+const isBlockedByUser = async (
+  blockerId,
+  blockedId
+) => {
+  const blocked = await db("blocked_users")
+    .where({
+      blockerId: Number(blockerId),
+      blockedId: Number(blockedId),
+    })
+    .first();
+
+  return Boolean(blocked);
+};
+
+const isBlocked = async (
+  userId,
+  otherUserId
+) => {
+  const blocked = await db("blocked_users")
+    .where((builder) => {
+      builder
+        .where({
+          blockerId: userId,
+          blockedId: otherUserId,
+        })
+        .orWhere({
+          blockerId: otherUserId,
+          blockedId: userId,
+        });
+    })
+    .first();
+
+  return Boolean(blocked);
+};
+
 export default {
   getDemoUsers,
   getUserById,
@@ -218,4 +307,7 @@ export default {
   checkusername,
   changePassword,
   addNewImage,
+  blockUser,
+  isBlocked,
+  isBlockedByUser
 };

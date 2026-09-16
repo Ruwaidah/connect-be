@@ -55,14 +55,63 @@ const deleteFriend = async (data) => {
 };
 
 // ********************************** SEARCH USER BY USERNAME **********************************
-const searchUserByUsername = async (data) => {
-  const friendReq = await db("friendRequest");
-  const user = await db("users")
-    .where("users.username", data.username)
-    .join("images", "users.image_id", "images.id")
+const searchUserByUsername = async ({
+  username,
+  userid,
+}) => {
+  return db("users")
+    .leftJoin(
+      "images",
+      "users.image_id",
+      "images.id"
+    )
+
+    .whereNot(
+      "users.id",
+      Number(userid)
+    )
+
+    .andWhere((query) => {
+      query
+        .whereILike(
+          "users.username",
+          `%${username}%`
+        )
+        .orWhereILike(
+          "users.firstName",
+          `%${username}%`
+        )
+        .orWhereILike(
+          "users.lastName",
+          `%${username}%`
+        );
+    })
+
+    .whereNotExists(function () {
+      this.select(1)
+        .from("blocked_users as b")
+        .where(function () {
+          this.where(function () {
+            this.whereRaw(
+              `b."blockerId" = ?`,
+              [Number(userid)]
+            ).andWhereRaw(
+              `b."blockedId" = "users"."id"`
+            );
+          })
+            .orWhere(function () {
+              this.whereRaw(
+                `b."blockedId" = ?`,
+                [Number(userid)]
+              ).andWhereRaw(
+                `b."blockerId" = "users"."id"`
+              );
+            });
+        });
+    })
+
     .select(
       "users.id",
-      "users.create_at",
       "users.firstName",
       "users.lastName",
       "users.username",
@@ -70,30 +119,60 @@ const searchUserByUsername = async (data) => {
       "users.image_id",
       "images.image",
       "images.public_id"
-    )
-    .first();
-  if (user) {
-    const friend = await db("friends")
-      .where({ user_id: data.userid, friend_id: user.id })
-      .orWhere({ user_id: user.id, friend_id: data.userid })
-      .first();
-    const friendReq = await db("friendRequest")
-      .where({
-        userSendRequest: data.userid,
-        userRecieveRequest: user.id,
-      })
-      .orWhere({
-        userRecieveRequest: data.userid,
-        userSendRequest: user.id,
-      })
-      .first();
-    return {
-      ...user,
-      friendReq: friendReq ? friendReq : null,
-      friend: friend ? true : false,
-    };
-  } else return null;
+    ).first()
 };
+
+
+
+
+// ********************************** GET BLOCKED USERS LIST **********************************
+const getBlockedUsers = async (blockerId) => {
+  return db("blocked_users as b")
+    .join(
+      "users as u",
+      "b.blockedId",
+      "u.id"
+    )
+    .leftJoin(
+      "images as img",
+      "u.image_id",
+      "img.id"
+    )
+    .where(
+      "b.blockerId",
+      Number(blockerId)
+    )
+    .select(
+      "b.id as blockId",
+      "u.id",
+      "u.firstName",
+      "u.lastName",
+      "u.username",
+      "u.bio",
+      "u.image_id",
+      "img.image",
+      "img.public_id"
+    )
+    .orderBy(
+      "b.created_at",
+      "desc"
+    );
+};
+
+
+// ********************************** UNBLOCK USER **********************************
+const unblockUser = async ({
+  blockerId,
+  blockedId,
+}) => {
+  return db("blocked_users")
+    .where({
+      blockerId: Number(blockerId),
+      blockedId: Number(blockedId),
+    })
+    .del();
+};
+
 
 export default {
   getAllFriendsList,
@@ -101,4 +180,6 @@ export default {
   deleteFriend,
   isFriend,
   searchUserByUsername,
+  getBlockedUsers,
+  unblockUser
 };

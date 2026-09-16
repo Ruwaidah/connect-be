@@ -579,33 +579,64 @@ router.post("/findfriend", (req, res) => {
 });
 
 // ********************************** GET SEARCHED USER **********************************
-router.get("/getsearcheduser/:searcheduser", (req, res) => {
-  User.searchForUser({
-    searchUserId: req.params.searcheduser,
-    userid: req.query.userid,
-    text: null,
-  })
-    .then((response) => {
-      if (response) {
-        res.status(200).json({
-          firstName: response.firstName,
-          lastName: response.lastName,
-          username: response.username,
-          bio: response.bio,
-          email: response.email,
-          image: response.image,
-          create_at: response.create_at,
-          id: response.id,
-          image_id: response.image_id,
-          public_id: response.public_id,
-          friendReq: response.friendReq,
-          friend: response.friend,
+router.get("/getsearcheduser/:searcheduser", async (req, res) => {
+  try {
+    const searchUserId = Number(
+      req.params.searcheduser
+    );
+
+    const userid = Number(
+      req.query.userid
+    );
+
+    const response =
+      await User.searchForUser({
+        searchUserId,
+        userid,
+        text: null,
+      });
+
+    if (!response) {
+      return res
+        .status(200)
+        .json({
+          message: "No User Found",
         });
-      } else res.status(200).json({ message: "No User Found" });
-    })
-    .catch((error) => {
-      res.status(500).json({ message: "Error Getting Data" });
+    }
+
+    const blocked =
+      await User.isBlockedByUser(
+        userid,
+        searchUserId
+      );
+
+    return res.status(200).json({
+      firstName: response.firstName,
+      lastName: response.lastName,
+      username: response.username,
+      bio: response.bio,
+      email: response.email,
+      image: response.image,
+      create_at: response.create_at,
+      id: response.id,
+      image_id: response.image_id,
+      public_id: response.public_id,
+      friendReq: response.friendReq,
+      friend: response.friend,
+      blocked,
     });
+  } catch (error) {
+    console.error(
+      "GET SEARCHED USER ERROR:",
+      error
+    );
+
+    return res
+      .status(500)
+      .json({
+        message: "Error Getting Data",
+      });
+  }
 });
 
 // ************************** SEND FRIEND REQUEST ******************************
@@ -688,6 +719,115 @@ router.delete("/deletefriend", (req, res) => {
 router.post("/logout", (req, res) => {
   UserDate.setUserDisId(req.body.id);
   res.status(200).json({ message: "User Logout" });
+});
+
+
+// ********************************** BLOCK USER **********************************
+router.post("/blockuser", async (req, res) => {
+  console.log("ada")
+  try {
+    const {
+      blockerId,
+      blockedId,
+    } = req.body;
+
+    if (!blockerId || !blockedId) {
+      return res.status(400).json({
+        message: "Missing user IDs.",
+      });
+    }
+
+    if (Number(blockerId) === Number(blockedId)) {
+      return res.status(400).json({
+        message: "You cannot block yourself.",
+      });
+    }
+
+    const blocked = await User.blockUser({
+      blockerId: Number(blockerId),
+      blockedId: Number(blockedId),
+    });
+
+    return res.status(200).json({
+      blocked,
+      blockedId: Number(blockedId),
+    });
+  } catch (error) {
+    console.error("BLOCK USER ERROR:", error);
+
+    return res.status(500).json({
+      message: "Unable to block user.",
+    });
+  }
+});
+
+
+
+// ********************************** GET BLOCKED USERS LIST **********************************
+router.get("/blockedusers/:userid", async (req, res) => {
+  try {
+    const userid = Number(
+      req.params.userid
+    );
+    console.log(userid)
+    const blockedUsers =
+      await Friends.getBlockedUsers(
+        userid
+      );
+
+    res.status(200).json(
+      blockedUsers
+    );
+  } catch (error) {
+    console.error(
+      "GET BLOCKED USERS ERROR:",
+      error
+    );
+
+    res.status(500).json({
+      message:
+        "Unable to get blocked users",
+    });
+  }
+});
+
+
+// ********************************** UNBLOCK USER **********************************
+router.delete("/unblockuser", async (req, res) => {
+  try {
+    const blockerId = Number(
+      req.body.blockerId
+    );
+
+    const blockedId = Number(
+      req.body.blockedId
+    );
+
+    if (!blockerId || !blockedId) {
+      return res.status(400).json({
+        message: "Missing user IDs",
+      });
+    }
+
+    await Friends.unblockUser({
+      blockerId,
+      blockedId,
+    });
+
+    res.status(200).json({
+      blockedId,
+    });
+  } catch (error) {
+    console.error(
+      "UNBLOCK USER ERROR:",
+      error
+    );
+
+    res.status(500).json({
+      message:
+        "Unable to unblock user",
+    });
+  }
 });
 
 const checkUserName = (name) =>

@@ -33,18 +33,23 @@ export const registerSocketHandlers = (io) => {
 
         // Friend request sent
         socket.on("FRIEND_REQUEST_SENT", (data) => {
+            const payload = {
+                userSendRequest: data.userSendRequest.id,
+                userRecieveRequest: data.userRecieveRequest,
+
+                firstName: data.userSendRequest.firstName,
+                lastName: data.userSendRequest.lastName,
+                username: data.userSendRequest.username,
+                image: data.userSendRequest.image,
+
+                friendReq: data.friendReq,
+            };
+
             emitToUser(
                 io,
                 data.userRecieveRequest,
                 "FRIEND_REQUEST_RECEIVED",
-                {
-                    data: {
-                        userSendRequest: data.userSendRequest.id,
-                        userRecieveRequest: data.userRecieveRequest,
-                    },
-                    friendReq: data.friendReq,
-                    message: `${data.userSendRequest.firstName} ${data.userSendRequest.lastName} sent you a friend request`,
-                }
+                payload
             );
         });
 
@@ -84,6 +89,7 @@ export const registerSocketHandlers = (io) => {
                 requestingUser,
             } = data;
 
+            // Send the accepting user to the person who sent the request
             emitToUser(
                 io,
                 userRequestingId,
@@ -91,10 +97,12 @@ export const registerSocketHandlers = (io) => {
                 {
                     userAcceptingId,
                     userRequestingId,
+                    otherUserId: userAcceptingId,
                     friend: acceptingUser,
                 }
             );
 
+            // Send the requesting user to the person who accepted
             emitToUser(
                 io,
                 userAcceptingId,
@@ -102,6 +110,7 @@ export const registerSocketHandlers = (io) => {
                 {
                     userAcceptingId,
                     userRequestingId,
+                    otherUserId: userRequestingId,
                     friend: requestingUser,
                 }
             );
@@ -109,30 +118,35 @@ export const registerSocketHandlers = (io) => {
 
         // Friend request rejected
         socket.on("FRIEND_REQUEST_REJECTED", (data) => {
-            console.log("BACKEND RECEIVED REJECT:", data);
-
             const {
                 userRejectingId,
                 userRequestingId,
             } = data;
 
-            const payload = {
-                userRejectingId,
-                userRequestingId,
-            };
+            console.log("BACKEND RECEIVED REJECT:", data);
 
+            // Send to the person who originally SENT the request
             emitToUser(
                 io,
                 userRequestingId,
                 "FRIEND_REQUEST_REJECTED_LIVE",
-                payload
+                {
+                    userRejectingId,
+                    userRequestingId,
+                    otherUserId: userRejectingId,
+                }
             );
 
+            // Send to the person who REJECTED the request
             emitToUser(
                 io,
                 userRejectingId,
                 "FRIEND_REQUEST_REJECTED_LIVE",
-                payload
+                {
+                    userRejectingId,
+                    userRequestingId,
+                    otherUserId: userRequestingId,
+                }
             );
         });
 
